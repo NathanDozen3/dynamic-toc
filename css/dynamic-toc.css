@@ -10,6 +10,7 @@
     justify-content: space-between;
     text-align: left;
     background: transparent;
+    cursor: pointer;
 }
 
 .toc .tocaccordion-backdrop {

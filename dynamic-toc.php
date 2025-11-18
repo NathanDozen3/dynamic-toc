@@ -1,7 +1,7 @@
 <?php
 /** 
  * Plugin Name: Dynamic Table of Contents Generator
- * Version: 1.0.1
+ * Version: 1.0.2
  * Description: Automatically generates a dynamic table of contents for posts and pages based on headings.
 */
 
@@ -59,7 +59,7 @@ function automatic_toc( string $content ): string {
         ];
 
         // Return the modified <h2> with the new ID, preserving the nested elements
-        return '<h2 id="' . esc_attr($slug) . '"' . trim($attributes) . '>' . $heading_html . '</h2>';
+        return '<h2 id="' . esc_attr($slug) . '" ' . trim($attributes) . '>' . $heading_html . '</h2>';
     }, $content);
 
     // Return the modified content
@@ -74,15 +74,17 @@ function toc( array $toc_list ) : string {
         <div class="tocaccordion">
             <div class="tocaccordion-item">
                 <button class="tocaccordion-title">
-                    <div class="tocaccordion-backdrop"></div>
-                    <h3 class="tocaccordion-header">Table of Contents</h3>
-                    <div class="tocaccordion-icon">+</div>
+                    <span class="tocaccordion-backdrop"></span>
+                    <span class="tocaccordion-header">Table of Contents</span>
+                    <span class="tocaccordion-icon">+</span>
                 </button>
-                <div class="tocaccordion-body"><ul>
-                    <?php foreach ( $toc_list as $item ) : ?>
-                        <li><a href="#<?php echo esc_attr( $item['slug'] ); ?>"><?php echo esc_html( $item['text'] ); ?></a></li>
-                    <?php endforeach; ?>
-                </ul>
+                <div class="tocaccordion-body">
+                    <ul>
+                        <?php foreach ( $toc_list as $item ) : ?>
+                            <li><a href="#<?php echo esc_attr( $item['slug'] ); ?>"><?php echo esc_html( $item['text'] ); ?></a></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
@@ -151,6 +153,6 @@ add_action( 'acf/include_fields', function() {
 
 
 add_action( 'wp_enqueue_scripts', function() {
-    wp_enqueue_script( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'js/dynamic-toc.js', array(), '1.0.1', true );
-    wp_enqueue_style( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'css/dynamic-toc.css', array(), '1.0.1' );
+    wp_enqueue_script( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'js/dynamic-toc.js', array(), '1.0.2', true );
+    wp_enqueue_style( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'css/dynamic-toc.css', array(), '1.0.2' );
 } );
