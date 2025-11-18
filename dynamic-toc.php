@@ -1,7 +1,7 @@
 <?php
 /** 
  * Plugin Name: Dynamic Table of Contents Generator
- * Version: 1.0
+ * Version: 1.0.1
  * Description: Automatically generates a dynamic table of contents for posts and pages based on headings.
 */
 
@@ -151,6 +151,6 @@ add_action( 'acf/include_fields', function() {
 
 
 add_action( 'wp_enqueue_scripts', function() {
-    wp_enqueue_script( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'js/dynamic-toc.js', array(), '1.0', true );
-    wp_enqueue_style( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'css/dynamic-toc.css', array(), '1.0' );
+    wp_enqueue_script( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'js/dynamic-toc.js', array(), '1.0.1', true );
+    wp_enqueue_style( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'css/dynamic-toc.css', array(), '1.0.1' );
 } );

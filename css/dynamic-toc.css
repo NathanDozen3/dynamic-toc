@@ -1,4 +1,8 @@
-.tocaccordion-title {
+.toc .tocaccordion {
+    margin-bottom: 1.5rem;
+}
+
+.toc .tocaccordion-title {
     position: relative;
     display: inline-flex;
     width: 100%;
@@ -8,13 +12,13 @@
     background: transparent;
 }
 
-.tocaccordion-backdrop {
+.toc .tocaccordion-backdrop {
     position: absolute;
     inset: 0;
 }
 
-.tocaccordion-header,
-.tocaccordion-icon {
+.toc .tocaccordion-header,
+.toc .tocaccordion-icon {
     position: relative;
     display: flex;
     align-items: center;
@@ -23,27 +27,28 @@
     line-height: 1.2;
 }
 
-.tocaccordion-header {
+.toc .tocaccordion-header {
     height: auto;
     padding-top: .75rem;
     padding-bottom: .75rem;
     padding-left: 2rem;
     font-size: 1rem;
+    margin: 0;
 }
 
 @media (min-width: 768px) {
-    .tocaccordion-header {
+    .toc .tocaccordion-header {
         padding-left: 2rem;
         padding-right: 2rem;
     }
 }
 
-.tocaccordion-icon {
+.toc .tocaccordion-icon {
     padding: 0 2rem;
     font-size: 1.5rem;
 }
 
-.tocaccordion-body {
+.toc .tocaccordion-body {
     max-height: 0;
     overflow: hidden;
     padding-left: 1rem;
@@ -53,7 +58,7 @@
     transition-duration: .3s;
 }
 
-.tocaccordion-body ul {
+.toc .tocaccordion-body ul {
     list-style-type: none;
     padding: 0;
 }
