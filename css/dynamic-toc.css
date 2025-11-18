@@ -1,0 +1,59 @@
+.tocaccordion-title {
+    position: relative;
+    display: inline-flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+    background: transparent;
+}
+
+.tocaccordion-backdrop {
+    position: absolute;
+    inset: 0;
+}
+
+.tocaccordion-header,
+.tocaccordion-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background-color: transparent;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.tocaccordion-header {
+    height: auto;
+    padding-top: .75rem;
+    padding-bottom: .75rem;
+    padding-left: 2rem;
+    font-size: 1rem;
+}
+
+@media (min-width: 768px) {
+    .tocaccordion-header {
+        padding-left: 2rem;
+        padding-right: 2rem;
+    }
+}
+
+.tocaccordion-icon {
+    padding: 0 2rem;
+    font-size: 1.5rem;
+}
+
+.tocaccordion-body {
+    max-height: 0;
+    overflow: hidden;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    transition-property: all;
+    transition-timing-function: cubic-bezier(.4, 0, .2, 1);
+    transition-duration: .3s;
+}
+
+.tocaccordion-body ul {
+    list-style-type: none;
+    padding: 0;
+}
