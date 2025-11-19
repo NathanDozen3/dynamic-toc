@@ -1,85 +1,115 @@
-.toc .tocaccordion {
+.ttm-toc {
     margin-bottom: 1.5rem;
 }
 
-.toc .tocaccordion-title {
-    position: relative;
+.ttm-toc__toggle {
+    margin-bottom: .5rem;
+}
+
+.ttm-toc__button {
     display: inline-flex;
-    width: 100%;
     align-items: center;
     justify-content: space-between;
-    text-align: left;
+    width: 100%;
     background: transparent;
+    border: none;
     cursor: pointer;
-}
-
-.toc .tocaccordion-backdrop {
-    position: absolute;
-    inset: 0;
-}
-
-.toc .tocaccordion-header,
-.toc .tocaccordion-icon {
-    position: relative;
-    display: flex;
-    align-items: center;
-    background-color: transparent;
     font-weight: 700;
-    line-height: 1.2;
+    padding: .5rem 1rem;
 }
 
-.toc .tocaccordion-header {
-    height: auto;
-    padding-top: .75rem;
-    padding-bottom: .75rem;
-    padding-left: 2rem;
+.ttm-toc__button:focus-visible {
+    outline: 3px solid #2b8af6;
+    outline-offset: 2px;
+}
+
+.ttm-toc__title {
     font-size: 1rem;
-    margin: 0;
 }
 
-@media (min-width: 768px) {
-    .toc .tocaccordion-header {
-        padding-left: 2rem;
-        padding-right: 2rem;
-    }
+.ttm-toc__info {
+    display: inline-flex;
+    align-items: center;
 }
 
-.toc .tocaccordion-icon {
-    padding: 0 2rem;
-    font-size: 1.5rem;
+.ttm-toc__count {
+    margin-left: .5rem;
+    color: #666;
+    font-weight: 400;
 }
 
-.toc .tocaccordion-body {
+.ttm-toc__icon {
+    margin-left: 1rem;
+    font-size: 1.25rem;
+}
+
+.ttm-toc__panel {
     max-height: 0;
     overflow: hidden;
     padding-left: 1rem;
     padding-right: 1rem;
-    transition-property: all;
+    transition-property: max-height;
     transition-timing-function: cubic-bezier(.4, 0, .2, 1);
     transition-duration: .3s;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .toc .tocaccordion-body {
+    .ttm-toc__panel {
         transition: none;
     }
 }
 
-.toc .tocaccordion-title:focus-visible {
-    outline: 3px solid #2b8af6;
-    outline-offset: 2px;
+.ttm-toc__panel[hidden] {
+    display: none;
 }
 
-.toc .tocaccordion-body ul {
-    list-style-type: none;
+.ttm-toc__list {
+    list-style: none;
     padding: 0;
+    margin: 0;
 }
 
-.toc .tocaccordion-body.open {
-    max-height: none;
+.ttm-toc__item {
+    margin: .25rem 0;
 }
 
-.toc .tocaccordion-body ul {
-    list-style-type: none;
-    padding: 0;
+/* Nested level spacing and visual hierarchy.  */
+.ttm-toc__list--level-2 {
+    padding-left: 0;
+}
+.ttm-toc__list--level-3 {
+    padding-left: 1rem; /* indent h3 under h2 */
+    font-size: .97rem;
+}
+.ttm-toc__list--level-4 {
+    padding-left: 1.75rem; /* deeper indent for h4 */
+    font-size: .95rem;
+}
+.ttm-toc__list--level-5 {
+    padding-left: 2.5rem;
+    font-size: .93rem;
+}
+.ttm-toc__list--level-6 {
+    padding-left: 3rem;
+    font-size: .92rem;
+}
+
+/* Links inside the TOC */
+.ttm-toc__item a {
+    color: inherit;
+    text-decoration: none;
+}
+.ttm-toc__item a:hover,
+.ttm-toc__item a:focus {
+    text-decoration: underline;
+}
+
+/* Make nested lists visually distinct but compact on small screens. */
+@media (max-width: 480px) {
+    .ttm-toc__list--level-3,
+    .ttm-toc__list--level-4,
+    .ttm-toc__list--level-5,
+    .ttm-toc__list--level-6 {
+        padding-left: 0.75rem;
+    }
 }

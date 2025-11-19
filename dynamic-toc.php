@@ -11,7 +11,7 @@
  * Plugin Name:       Dynamic Table of Contents Generator
  * Plugin URI:        https://github.com/NathanDozen3/dynamic-toc/
  * Description:       Automatically generates a dynamic table of contents for posts and pages based on headings.
- * Version:           1.2.0
+ * Version:           1.3.0
  * Requires at least: 5.2
  * Requires PHP:      8.1
  * Author:            Nathan Johnson
@@ -202,9 +202,20 @@ function automatic_toc( string $content, int $post_id = 0 ): string {
 		}
 
 		$used_slugs[] = $slug;
+		// Determine heading level (e.g., h2 -> 2). Default to 2 if not parsable.
+		$tag_name = strtolower( $node->nodeName ); // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+		$level = 2;
+		if ( 0 === strpos( $tag_name, 'h' ) && isset( $tag_name[1] ) ) {
+			$maybe = (int) substr( $tag_name, 1 );
+			if ( $maybe >= 1 && $maybe <= 6 ) {
+				$level = $maybe;
+			}
+		}
+
 		$toc_list[] = array(
-			'slug' => $slug,
-			'text' => $heading_text,
+			'slug'  => $slug,
+			'text'  => $heading_text,
+			'level' => $level,
 		);
 	}
 
@@ -350,35 +361,88 @@ add_action( 'save_post', __NAMESPACE__ . '\\ttm_dynamic_toc_save_meta' );
  * Render the TOC markup from a list of items.
  *
  * @since 1.1
- * @param array<int,array{slug:string,text:string}> $toc_list Array of TOC items. Each item is an
- *                                                               associative array with keys
- *                                                               'slug' => string and
- *                                                               'text' => string.
+ * @param array<int,array{slug:string,text:string,level:int}> $toc_list Array of TOC items. Each
+ *                                                                       item is an associative
+ *                                                                       array with keys
+ *                                                                       'slug' => string,
+ *                                                                       'text' => string and
+ *                                                                       'level' => int.
  * @return string TOC HTML markup.
  */
 function toc( array $toc_list ): string {
 
 	ob_start();
+
+	/* Generate unique IDs so multiple TOCs on a page won't conflict. */
+	$uniq = wp_unique_id( 'ttm-toc-' );
+	$nav_label_id = 'ttm-toc-heading-' . $uniq;
+	$toggle_id = 'ttm-toc-toggle-' . $uniq;
+	$panel_id = 'ttm-toc-panel-' . $uniq;
+	$count = count( $toc_list );
+
 	?>
-	<div class="toc">
-		<div class="tocaccordion">
-			<div class="tocaccordion-item">
-				<button class="tocaccordion-title" aria-expanded="false" type="button">
-					<span class="tocaccordion-backdrop"></span>
-					<span class="tocaccordion-header"><?php echo esc_html__( 'Table of Contents', 'dynamic-toc' ); ?></span>
-					<span class="tocaccordion-icon">+</span>
-				</button>
-				<div class="tocaccordion-body">
-					<ul>
-						<?php foreach ( $toc_list as $item ) : ?>
-							<li><a href="#<?php echo esc_attr( $item['slug'] ); ?>"><?php echo esc_html( $item['text'] ); ?></a></li>
-						<?php endforeach; ?>
-					</ul>
-				</div>
-			</div>
+	<nav class="ttm-toc" aria-labelledby="<?php echo esc_attr( $nav_label_id ); ?>">
+		<h2 id="<?php echo esc_attr( $nav_label_id ); ?>" class="screen-reader-text"><?php echo esc_html__( 'Table of contents', 'dynamic-toc' ); ?></h2>
+
+		<div class="ttm-toc__toggle">
+			<button id="<?php echo esc_attr( $toggle_id ); ?>" class="ttm-toc__button" type="button" aria-expanded="false" aria-controls="<?php echo esc_attr( $panel_id ); ?>">
+				<span class="ttm-toc__title"><?php echo esc_html__( 'Table of contents', 'dynamic-toc' ); ?></span>
+				<span class="ttm-toc__info">
+					<span class="ttm-toc__count">(<?php echo esc_html( (string) $count ); ?>)</span>
+					<span class="ttm-toc__icon" aria-hidden="true">+</span>
+				</span>
+			</button>
 		</div>
-	</div>
-	
+
+		<div id="<?php echo esc_attr( $panel_id ); ?>" class="ttm-toc__panel" role="region" aria-labelledby="<?php echo esc_attr( $toggle_id ); ?>" hidden>
+			<?php
+			// Render a nested ordered list based on heading levels. Compute the minimum
+			// heading level present so we render lists starting from that base.
+			$levels = array_map(
+				static function ( $it ) {
+					return isset( $it['level'] ) ? (int) $it['level'] : 2;
+				},
+				$toc_list
+			);
+			$min_level = ! empty( $levels ) ? min( $levels ) : 2;
+
+			$prev_level = $min_level - 1;
+
+			foreach ( $toc_list as $item ) :
+				$level = isset( $item['level'] ) ? (int) $item['level'] : $min_level;
+				if ( $level < $min_level ) {
+					$level = $min_level;
+				}
+
+				if ( $level > $prev_level ) {
+					for ( $i = $prev_level + 1; $i <= $level; $i++ ) {
+						echo '<ol class="ttm-toc__list ttm-toc__list--level-' . esc_attr( $i ) . '">';
+					}
+				} elseif ( $level < $prev_level ) {
+					for ( $i = $prev_level; $i > $level; $i-- ) {
+						echo '</li></ol>';
+					}
+					echo '</li>';
+				} elseif ( $prev_level >= $min_level ) {
+					// Same level as previous, close previous li.
+					echo '</li>';
+				}
+
+				// Output current list item (left open so nested lists can be appended).
+				?>
+				<li class="ttm-toc__item"><a href="#<?php echo esc_attr( $item['slug'] ); ?>"><?php echo esc_html( $item['text'] ); ?></a>
+				<?php
+				$prev_level = $level;
+			endforeach;
+
+			// Close any remaining open lists.
+			for ( $i = $prev_level; $i >= $min_level; $i-- ) {
+				echo '</li></ol>';
+			}
+			?>
+		</div>
+	</nav>
+
 	<?php
 	return ob_get_clean();
 }
