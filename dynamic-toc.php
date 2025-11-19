@@ -1,11 +1,24 @@
 <?php
 /**
- * Plugin Name: Dynamic Table of Contents Generator
- * Version: 1.1
- * Description: Automatically generates a dynamic table of contents for posts and pages based on headings.
+ * Dynamic Table of Contents Generator
  *
- * @package   Dynamic_TOC
- * @copyright 2025 NathanDozen3
+ * @package           Dynamic_TOC
+ * @author            Nathan Johnson
+ * @copyright         2025 Nathan Johnson
+ * @license           GPL-2.0-or-later
+ *
+ * @wordpress-plugin
+ * Plugin Name:       Dynamic Table of Contents Generator
+ * Plugin URI:        https://github.com/NathanDozen3/dynamic-toc/
+ * Description:       Automatically generates a dynamic table of contents for posts and pages based on headings.
+ * Version:           1.2.0
+ * Requires at least: 5.2
+ * Requires PHP:      8.1
+ * Author:            Nathan Johnson
+ * Author URI:        https://github.com/NathanDozen3
+ * Text Domain:       ttm-dynamic-toc
+ * License:           GPL v2 or later
+ * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
  */
 
 declare( strict_types=1 );
@@ -19,6 +32,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * Define plugin version constant.
+ */
+add_action(
+	'init',
+	function () {
+		$plugin_version = get_plugin_data( __FILE__ )['Version'];
+		define( 'TTM_DYNAMIC_TOC_VERSION', $plugin_version );
+	}
+);
+
+/**
  * Load textdomain for translations
  */
 add_action(
@@ -29,11 +53,6 @@ add_action(
 );
 
 /**
- * Register front-end assets so they can be enqueued only when needed
- */
-add_action( 'wp_enqueue_scripts', __NAMESPACE__ . '\\ttm_dynamic_toc_register_assets' );
-
-/**
  * Register plugin assets (scripts & styles).
  *
  * Registers the script and style handles so they may be enqueued when a TOC is rendered.
@@ -42,11 +61,10 @@ add_action( 'wp_enqueue_scripts', __NAMESPACE__ . '\\ttm_dynamic_toc_register_as
  * @return void
  */
 function ttm_dynamic_toc_register_assets(): void {
-	wp_register_script( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'js/dynamic-toc.js', array(), '1.1', true );
-	wp_register_style( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'css/dynamic-toc.css', array(), '1.1' );
+	wp_register_script( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'js/dynamic-toc.js', array(), TTM_DYNAMIC_TOC_VERSION, true );
+	wp_register_style( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'css/dynamic-toc.css', array(), TTM_DYNAMIC_TOC_VERSION );
 }
-
-add_filter( 'the_content', __NAMESPACE__ . '\ttm_dynamic_toc_the_content' );
+add_action( 'wp_enqueue_scripts', __NAMESPACE__ . '\\ttm_dynamic_toc_register_assets' );
 
 /**
  * Filter the post content and inject the dynamic TOC when enabled.
@@ -87,6 +105,7 @@ function ttm_dynamic_toc_the_content( string $content ): string {
 
 	return automatic_toc( $content, isset( $post->ID ) ? (int) $post->ID : 0 );
 }
+add_filter( 'the_content', __NAMESPACE__ . '\ttm_dynamic_toc_the_content' );
 
 /**
  * Build and inject the TOC into post content.
@@ -109,7 +128,16 @@ function automatic_toc( string $content, int $post_id = 0 ): string {
 	$doc = new \DOMDocument();
 	// Wrap content in a container so we can extract modified inner HTML later.
 	$wrapped = '<div class="ttm-toc-wrapper">' . $content . '</div>';
-	$doc->loadHTML( mb_convert_encoding( $wrapped, 'HTML-ENTITIES', 'UTF-8' ) );
+
+	/*
+	 * Avoid deprecated mb_convert_encoding() handling of HTML entities. Prepending an
+	 * XML encoding declaration and using LIBXML flags produces consistent results
+	 * with DOMDocument::loadHTML without triggering mbstring deprecation notices.
+	 */
+	$html_for_dom = '<?xml encoding="utf-8" ?>' . $wrapped;
+	// LIBXML_HTML_NOIMPLIED and LIBXML_HTML_NODEFDTD keep DOMDocument from adding
+	// extra html/body tags around fragments on newer PHP versions.
+	$doc->loadHTML( $html_for_dom, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD );
 	$xpath = new \DOMXPath( $doc );
 
 	// Allow configurable heading levels (defaults to h2-h4).
