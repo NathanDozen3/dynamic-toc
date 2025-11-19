@@ -23,15 +23,20 @@ add_action( 'plugins_loaded', function() {
 /**
  * Register front-end assets so they can be enqueued only when needed
  */
-add_action( 'wp_enqueue_scripts', function() {
-    wp_register_script( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'js/dynamic-toc.js', array(), '1.1', true );
-    wp_register_style( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'css/dynamic-toc.css', array(), '1.1' );
-} );
-
-add_filter( 'the_content', __NAMESPACE__ . '\\ttm_dynamic_toc_the_content' );
+add_action( 'wp_enqueue_scripts', __NAMESPACE__ . '\\ttm_dynamic_toc_register_assets' );
 
 /**
- * Main content filter wrapper. Checks context and ACF field safely, then generates TOC when appropriate.
+ * Register plugin assets (scripts & styles).
+ */
+function ttm_dynamic_toc_register_assets() {
+    wp_register_script( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'js/dynamic-toc.js', array(), '1.1', true );
+    wp_register_style( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'css/dynamic-toc.css', array(), '1.1' );
+}
+
+add_filter( 'the_content', __NAMESPACE__ . '\ttm_dynamic_toc_the_content' );
+
+/**
+ * Main content filter wrapper. Checks context and option/filters, then generates TOC when appropriate.
  */
 function ttm_dynamic_toc_the_content( $content ) {
     // Only run on front-end singular pages in the main query
@@ -41,11 +46,17 @@ function ttm_dynamic_toc_the_content( $content ) {
 
     global $post;
 
-    // Safe ACF check (ACF may not be active)
-    $enabled = false;
-    if ( function_exists( 'get_field' ) ) {
-        $field = get_field( 'enable_dynamic_toc' );
-        $enabled = is_array( $field ) ? in_array( 'enable_dynamic_toc', $field, true ) : (bool) $field;
+    // Per-page meta takes precedence. If post meta is explicitly set (0/1), use it.
+    // Fallback to global option and then filter.
+    $meta_key = apply_filters( 'ttm_dynamic_toc_meta_key', 'ttm_dynamic_toc_enabled' );
+    $meta_val = get_post_meta( isset( $post->ID ) ? (int) $post->ID : 0, $meta_key, true );
+
+    if ( '' !== $meta_val && null !== $meta_val ) {
+        $enabled = (bool) $meta_val;
+    } else {
+        // Read enable flag from an option (remove ACF dependency). Site owners can set this option
+        // or filter it programmatically. Default: false.
+        $enabled = (bool) get_option( 'ttm_dynamic_toc_enabled', false );
     }
 
     // Allow programmatic overrides
@@ -70,33 +81,56 @@ function automatic_toc( string $content, int $post_id = 0 ): string {
     $doc->loadHTML( mb_convert_encoding( $wrapped, 'HTML-ENTITIES', 'UTF-8' ) );
     $xpath = new \DOMXPath( $doc );
 
-    // Identify all <div> elements that include the class "custom_block" and mark descendant H2s to ignore
-    $ignore_map = array();
-    $divs = $xpath->query( '//div[contains(concat(" ", normalize-space(@class), " "), " custom_block ")]' );
-    foreach ( $divs as $div ) {
-        $h2s_in_div = $div->getElementsByTagName( 'h2' );
-        foreach ( $h2s_in_div as $h2 ) {
-            $ignore_map[spl_object_hash( $h2 )] = true;
+    // Allow configurable heading levels (defaults to h2-h4)
+    $default_levels = array( 2, 3, 4 );
+    $levels = (array) apply_filters( 'ttm_dynamic_toc_heading_levels', $default_levels );
+    $tags = array();
+    foreach ( $levels as $lvl ) {
+        $lvl = (int) $lvl;
+        if ( $lvl >= 1 && $lvl <= 6 ) {
+            $tags[] = 'h' . $lvl;
         }
     }
 
-    // Gather all H2 elements
-    $h2s = $doc->getElementsByTagName( 'h2' );
+    if ( empty( $tags ) ) {
+        // fallback to h2 if configuration is empty/invalid
+        $tags = array( 'h2' );
+    }
+
+    // Build xpath query to select all requested heading tags in document order
+    $xpath_query_parts = array();
+    foreach ( $tags as $tag ) {
+        $xpath_query_parts[] = '//' . $tag;
+    }
+    $xpath_query = implode( '|', $xpath_query_parts );
+
+    // Identify any heading nodes inside custom_block containers and mark them to ignore
+    $ignore_map = array();
+    $custom_divs = $xpath->query( '//div[contains(concat(" ", normalize-space(@class), " "), " custom_block ")]' );
+    foreach ( $custom_divs as $div ) {
+        $inner_nodes = $xpath->query( '.' . str_replace('//', '/', $xpath_query), $div );
+        foreach ( $inner_nodes as $n ) {
+            $ignore_map[spl_object_hash( $n )] = true;
+        }
+    }
+
+    // Gather all heading nodes
+    $nodes = $xpath->query( $xpath_query );
     $used_slugs = array();
-    foreach ( $h2s as $h2 ) {
-        // Skip any H2s inside ignored containers
-        if ( isset( $ignore_map[spl_object_hash( $h2 )] ) ) {
+    foreach ( $nodes as $node ) {
+        // Skip any headings inside ignored containers
+        if ( isset( $ignore_map[spl_object_hash( $node )] ) ) {
             continue;
         }
 
-        $heading_text = trim( $h2->textContent );
+        $heading_text = trim( $node->textContent );
         if ( $heading_text === '' ) {
             continue;
         }
 
         // Use existing ID if present; otherwise generate a safe WP slug and ensure uniqueness
-        if ( $h2->hasAttribute( 'id' ) ) {
-            $slug = $h2->getAttribute( 'id' );
+        if ( $node->hasAttribute( 'id' ) ) {
+            $slug = $node->getAttribute( 'id' );
         } else {
             $slug = \sanitize_title( wp_strip_all_tags( $heading_text ) );
             $original = $slug;
@@ -105,7 +139,7 @@ function automatic_toc( string $content, int $post_id = 0 ): string {
                 $slug = $original . '-' . $i;
                 $i++;
             }
-            $h2->setAttribute( 'id', $slug );
+            $node->setAttribute( 'id', $slug );
         }
 
         $used_slugs[] = $slug;
@@ -119,6 +153,16 @@ function automatic_toc( string $content, int $post_id = 0 ): string {
     // Nothing to do if no headings found
     if ( empty( $toc_list ) ) {
         return $content;
+    }
+
+    // Build output and support server-side caching. Use a single per-post transient that
+    // stores both the content hash and the HTML so we can invalidate easily on save.
+    $cache_ttl = (int) apply_filters( 'ttm_dynamic_toc_cache_ttl', 12 * HOUR_IN_SECONDS );
+    $cache_key = 'ttm_toc_' . (int) $post_id;
+    $cached = get_transient( $cache_key );
+    $content_hash = md5( $content );
+    if ( is_array( $cached ) && isset( $cached['hash'], $cached['html'] ) && $cached['hash'] === $content_hash ) {
+        return $cached['html'];
     }
 
     // Enqueue assets only when we will output the TOC
@@ -143,7 +187,72 @@ function automatic_toc( string $content, int $post_id = 0 ): string {
     $toc_html = toc( $toc_list );
     $toc_html = apply_filters( 'ttm_dynamic_toc_html', $toc_html, $toc_list, $post_id );
 
-    return $toc_html . $new_content;
+    $result = $toc_html . $new_content;
+    // Store in transient with hash for validation
+    set_transient( $cache_key, array( 'hash' => $content_hash, 'html' => $result ), $cache_ttl );
+
+    return $result;
+}
+
+/**
+ * Add per-page meta box for enabling the TOC.
+ */
+add_action( 'add_meta_boxes', __NAMESPACE__ . '\\ttm_dynamic_toc_add_meta_box' );
+function ttm_dynamic_toc_add_meta_box() {
+    $post_types = apply_filters( 'ttm_dynamic_toc_meta_post_types', array( 'page' ) );
+    foreach ( (array) $post_types as $pt ) {
+        add_meta_box(
+            'ttm_dynamic_toc_meta',
+            __( 'Dynamic TOC', 'dynamic-toc' ),
+            __NAMESPACE__ . '\\ttm_dynamic_toc_meta_box_callback',
+            $pt,
+            'side',
+            'default'
+        );
+    }
+}
+
+function ttm_dynamic_toc_meta_box_callback( $post ) {
+    $meta_key = apply_filters( 'ttm_dynamic_toc_meta_key', 'ttm_dynamic_toc_enabled' );
+    $value = get_post_meta( $post->ID, $meta_key, true );
+    wp_nonce_field( 'ttm_dynamic_toc_meta_box', 'ttm_dynamic_toc_meta_box_nonce' );
+    ?>
+    <p>
+        <label for="ttm_dynamic_toc_enabled">
+            <input type="checkbox" name="ttm_dynamic_toc_enabled" id="ttm_dynamic_toc_enabled" value="1" <?php checked( $value, '1' ); ?> />
+            <?php esc_html_e( 'Enable Dynamic Table of Contents for this page', 'dynamic-toc' ); ?>
+        </label>
+    </p>
+    <?php
+}
+
+/**
+ * Save meta and clear cached transient for this post so changes take immediate effect.
+ */
+add_action( 'save_post', __NAMESPACE__ . '\\ttm_dynamic_toc_save_meta' );
+function ttm_dynamic_toc_save_meta( $post_id ) {
+    // security checks
+    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+        return;
+    }
+    if ( wp_is_post_revision( $post_id ) ) {
+        return;
+    }
+    if ( ! current_user_can( 'edit_post', $post_id ) ) {
+        return;
+    }
+
+    if ( ! isset( $_POST['ttm_dynamic_toc_meta_box_nonce'] ) || ! wp_verify_nonce( wp_unslash( $_POST['ttm_dynamic_toc_meta_box_nonce'] ), 'ttm_dynamic_toc_meta_box' ) ) {
+        return;
+    }
+
+    $meta_key = apply_filters( 'ttm_dynamic_toc_meta_key', 'ttm_dynamic_toc_enabled' );
+    $value = isset( $_POST['ttm_dynamic_toc_enabled'] ) ? '1' : '0';
+    update_post_meta( $post_id, $meta_key, $value );
+
+    // Clear cached TOC transient for this post so enabling/disabling or content changes take effect
+    $cache_key = 'ttm_toc_' . (int) $post_id;
+    delete_transient( $cache_key );
 }
 
 function toc( array $toc_list ) : string {
@@ -153,9 +262,9 @@ function toc( array $toc_list ) : string {
     <div class="toc">
         <div class="tocaccordion">
             <div class="tocaccordion-item">
-                <button class="tocaccordion-title">
+                <button class="tocaccordion-title" aria-expanded="false" type="button">
                     <span class="tocaccordion-backdrop"></span>
-                    <span class="tocaccordion-header">Table of Contents</span>
+                    <span class="tocaccordion-header"><?php echo esc_html__( 'Table of Contents', 'dynamic-toc' ); ?></span>
                     <span class="tocaccordion-icon">+</span>
                 </button>
                 <div class="tocaccordion-body">
@@ -172,61 +281,3 @@ function toc( array $toc_list ) : string {
     <?php
     return ob_get_clean();
 }
-
-add_action( 'acf/include_fields', function() {
-	if ( ! function_exists( 'acf_add_local_field_group' ) ) {
-		return;
-	}
-
-	acf_add_local_field_group( array(
-        'key' => 'group_67853d2c2552d',
-        'title' => 'Dynamic TOC',
-        'fields' => array(
-            array(
-                'key' => 'field_67853d2c60e58',
-                'label' => 'Enable Dynamic TOC',
-                'name' => 'enable_dynamic_toc',
-                'aria-label' => '',
-                'type' => 'checkbox',
-                'instructions' => 'This is a dynamic Table of Contents function that will display an accordion TOC at the top of the page based of the H2s on the page.',
-                'required' => 0,
-                'conditional_logic' => 0,
-                'wrapper' => array(
-                    'width' => '',
-                    'class' => '',
-                    'id' => '',
-                ),
-                'choices' => array(
-                    'enable_dynamic_toc' => 'Yes',
-                ),
-                'default_value' => array(
-                ),
-                'return_format' => 'value',
-                'allow_custom' => 0,
-                'allow_in_bindings' => 0,
-                'layout' => 'vertical',
-                'toggle' => 0,
-                'save_custom' => 0,
-                'custom_choice_button_text' => 'Add new choice',
-            ),
-        ),
-        'location' => array(
-            array(
-                array(
-                    'param' => 'post_type',
-                    'operator' => '==',
-                    'value' => 'page',
-                ),
-            ),
-        ),
-        'menu_order' => 0,
-        'position' => 'normal',
-        'style' => 'default',
-        'label_placement' => 'top',
-        'instruction_placement' => 'label',
-        'hide_on_screen' => '',
-        'active' => true,
-        'description' => '',
-        'show_in_rest' => 0,
-    ) );
-} );
