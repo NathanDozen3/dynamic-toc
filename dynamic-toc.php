@@ -86,6 +86,16 @@ function ttm_dynamic_toc_the_content( string $content ): string {
 
 	// Per-page meta takes precedence. If post meta is explicitly set (0/1), use it.
 	// Fallback to global option and then filter.
+	/**
+	 * Filter the post meta key used to determine whether the TOC is enabled per-post.
+	 *
+	 * Allows changing the meta key name that the plugin looks up on the post.
+	 *
+	 * @since 1.1
+	 *
+	 * @param string $meta_key Meta key to check for per-post TOC enable. Default 'ttm_dynamic_toc_enabled'.
+	 * @return string
+	 */
 	$meta_key = apply_filters( 'ttm_dynamic_toc_meta_key', 'ttm_dynamic_toc_enabled' );
 	$meta_val = get_post_meta( isset( $post->ID ) ? (int) $post->ID : 0, $meta_key, true );
 
@@ -98,6 +108,18 @@ function ttm_dynamic_toc_the_content( string $content ): string {
 	}
 
 	// Allow programmatic overrides.
+	/**
+	 * Filter whether the dynamic TOC is enabled for a given post.
+	 *
+	 * This filter receives the current enabled state and the post ID so callers
+	 * can enable or disable the TOC programmatically.
+	 *
+	 * @since 1.1
+	 *
+	 * @param bool $enabled Current enabled state.
+	 * @param int  $post_id Post ID being checked.
+	 * @return bool
+	 */
 	$enabled = apply_filters( 'ttm_dynamic_toc_enabled', $enabled, isset( $post->ID ) ? $post->ID : 0 );
 	if ( ! $enabled ) {
 		return $content;
@@ -142,6 +164,16 @@ function automatic_toc( string $content, int $post_id = 0 ): string {
 
 	// Allow configurable heading levels (defaults to h2-h4).
 	$default_levels = array( 2, 3, 4 );
+	/**
+	 * Filter the heading levels that the TOC should include.
+	 *
+	 * Receives an array of integers representing heading levels (1-6). Default is h2-h4.
+	 *
+	 * @since 1.1
+	 *
+	 * @param int[] $levels Array of heading levels to include. Default: array(2,3,4).
+	 * @return int[]
+	 */
 	$levels = (array) apply_filters( 'ttm_dynamic_toc_heading_levels', $default_levels );
 	$tags = array();
 	foreach ( $levels as $lvl ) {
@@ -236,6 +268,16 @@ function automatic_toc( string $content, int $post_id = 0 ): string {
 
 	// Build output and support server-side caching. Use a single per-post transient that
 	// stores both the content hash and the HTML so we can invalidate easily on save.
+	/**
+	 * Filter the per-post TOC cache TTL (seconds).
+	 *
+	 * Allows adjustment of how long the server-side per-post TOC transient is cached.
+	 *
+	 * @since 1.1
+	 *
+	 * @param int $ttl Time to live in seconds. Default: 12 * HOUR_IN_SECONDS.
+	 * @return int
+	 */
 	$cache_ttl = (int) apply_filters( 'ttm_dynamic_toc_cache_ttl', 12 * HOUR_IN_SECONDS );
 	$cache_key = 'ttm_toc_' . (int) $post_id;
 	$cached = get_transient( $cache_key );
@@ -260,6 +302,19 @@ function automatic_toc( string $content, int $post_id = 0 ): string {
 
 	// Build TOC HTML and allow developers to filter it.
 	$toc_html = toc( $toc_list );
+	/**
+	 * Filter the generated TOC HTML before it is inserted into the post content.
+	 *
+	 * This filter allows plugins or themes to modify the rendered TOC markup, or
+	 * replace it entirely.
+	 *
+	 * @since 1.1
+	 *
+	 * @param string $toc_html Rendered TOC HTML.
+	 * @param array<int,array{slug:string,text:string,level:int}> $toc_list Array of TOC items.
+	 * @param int $post_id Post ID the TOC is being generated for.
+	 * @return string Filtered TOC HTML.
+	 */
 	$toc_html = apply_filters( 'ttm_dynamic_toc_html', $toc_html, $toc_list, $post_id );
 
 	$result = $toc_html . $new_content;
@@ -285,7 +340,17 @@ function automatic_toc( string $content, int $post_id = 0 ): string {
  * @return void
  */
 function ttm_dynamic_toc_add_meta_box(): void {
-	$post_types = apply_filters( 'ttm_dynamic_toc_meta_post_types', array( 'page' ) );
+	/**
+	 * Filter the list of post types which should display the Dynamic TOC meta box.
+	 *
+	 * Allows themes and plugins to add support for additional post types.
+	 *
+	 * @since 1.1
+	 *
+	 * @param string[] $post_types Array of post type slugs. Default: array( 'post', 'page' ).
+	 * @return string[]
+	 */
+	$post_types = apply_filters( 'ttm_dynamic_toc_meta_post_types', array( 'post', 'page' ) );
 	foreach ( (array) $post_types as $pt ) {
 		add_meta_box(
 			'ttm_dynamic_toc_meta',
@@ -307,6 +372,17 @@ add_action( 'add_meta_boxes', __NAMESPACE__ . '\\ttm_dynamic_toc_add_meta_box' )
  * @return void Outputs the meta box HTML.
  */
 function ttm_dynamic_toc_meta_box_callback( WP_Post $post ): void {
+	/**
+	 * Filter the post meta key used to store the per-page TOC enabled state.
+	 *
+	 * Mirrors the same filter used when reading the meta in the content filter
+	 * so custom meta keys remain consistent.
+	 *
+	 * @since 1.1
+	 *
+	 * @param string $meta_key Meta key to use. Default: 'ttm_dynamic_toc_enabled'.
+	 * @return string
+	 */
 	$meta_key = apply_filters( 'ttm_dynamic_toc_meta_key', 'ttm_dynamic_toc_enabled' );
 	$value = get_post_meta( $post->ID, $meta_key, true );
 	wp_nonce_field( 'ttm_dynamic_toc_meta_box', 'ttm_dynamic_toc_meta_box_nonce' );
@@ -347,6 +423,16 @@ function ttm_dynamic_toc_save_meta( int $post_id ): void {
 		return;
 	}
 
+	/**
+	 * Filter the post meta key used to store the per-page TOC enabled state when saving.
+	 *
+	 * This ensures the save handler writes to the same meta key that is read elsewhere.
+	 *
+	 * @since 1.1
+	 *
+	 * @param string $meta_key Meta key to use. Default: 'ttm_dynamic_toc_enabled'.
+	 * @return string
+	 */
 	$meta_key = apply_filters( 'ttm_dynamic_toc_meta_key', 'ttm_dynamic_toc_enabled' );
 	$value = isset( $_POST['ttm_dynamic_toc_enabled'] ) ? '1' : '0';
 	update_post_meta( $post_id, $meta_key, $value );

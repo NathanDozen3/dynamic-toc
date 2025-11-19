@@ -33,22 +33,75 @@ A small, accessible WordPress plugin that automatically generates a table of con
 
 ## Filters & Hooks
 
+Below are the available filters and short usage examples showing how to modify plugin behavior from a theme or custom plugin.
+
 - `ttm_dynamic_toc_enabled` (bool $enabled, int $post_id)
   - Filter whether the TOC is enabled for a post.
 
-- `ttm_dynamic_toc_heading_levels` (array $levels)
+```php
+// Disable TOC for a specific post ID.
+add_filter( 'ttm_dynamic_toc_enabled', function( $enabled, $post_id ) {
+    if ( 42 === (int) $post_id ) {
+        return false;
+    }
+    return $enabled;
+}, 10, 2 );
+```
+
+- `ttm_dynamic_toc_heading_levels` (int[] $levels)
   - Filter the heading levels the TOC should consider. Defaults to `[2,3,4]`.
+
+```php
+// Include h2-h5 in the TOC.
+add_filter( 'ttm_dynamic_toc_heading_levels', function() {
+    return array( 2, 3, 4, 5 );
+} );
+```
 
 - `ttm_dynamic_toc_meta_key` (string $meta_key)
   - Filter the post meta key used for the per-page enable checkbox. Default: `ttm_dynamic_toc_enabled`.
 
+```php
+// Use a custom meta key if your site already uses a different one.
+add_filter( 'ttm_dynamic_toc_meta_key', function( $key ) {
+    return 'my_custom_toc_flag';
+} );
+```
+
 - `ttm_dynamic_toc_cache_ttl` (int $seconds)
   - Filter the transient TTL (default 12 hours).
+
+```php
+// Reduce cache TTL to 1 hour.
+add_filter( 'ttm_dynamic_toc_cache_ttl', function( $ttl ) {
+    return HOUR_IN_SECONDS;
+} );
+```
 
 - `ttm_dynamic_toc_html` (string $html, array $toc_list, int $post_id)
   - Filter the rendered TOC HTML before it is prepended to content.
 
-- `ttm_dynamic_toc_register_assets` is the function that registers the JS and CSS handles. You can dequeue or override behavior as needed.
+```php
+// Wrap the TOC in a custom container or modify markup.
+add_filter( 'ttm_dynamic_toc_html', function( $html, $toc_list, $post_id ) {
+    return '<div class="my-toc-wrap">' . $html . '</div>';
+}, 10, 3 );
+```
+
+- `ttm_dynamic_toc_meta_post_types` (string[] $post_types)
+  - Filter the post types that show the per-page TOC meta box in the editor.
+
+```php
+// Enable the meta box for a custom post type 'book'.
+add_filter( 'ttm_dynamic_toc_meta_post_types', function( $types ) {
+    $types[] = 'book';
+    return $types;
+} );
+```
+
+Notes:
+- The plugin registers assets via `ttm_dynamic_toc_register_assets()`; you can dequeue or override the handles `ttm-dynamic-toc` in your theme if you need custom styling or behavior.
+- Use the `ttm_dynamic_toc_html` filter to fully replace the output if you need a completely different markup structure.
 
 ## Development
 
