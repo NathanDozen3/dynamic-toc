@@ -11,7 +11,7 @@
  * Plugin Name:       Dynamic Table of Contents Generator
  * Plugin URI:        https://github.com/NathanDozen3/dynamic-toc/
  * Description:       Automatically generates a dynamic table of contents for posts and pages based on headings.
- * Version:           1.3.0
+ * Version:           1.4.0
  * Requires at least: 5.2
  * Requires PHP:      8.1
  * Author:            Nathan Johnson
@@ -182,7 +182,7 @@ function automatic_toc( string $content, int $post_id = 0 ): string {
 		if ( isset( $ignore_map[ spl_object_hash( $node ) ] ) ) {
 			continue;
 		}
-				  $heading_text = trim( $node->textContent ); // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+		$heading_text = trim( $node->textContent ); // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
 		if ( '' === $heading_text ) {
 			continue;
 		}
