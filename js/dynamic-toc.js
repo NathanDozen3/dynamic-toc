@@ -1,43 +1,80 @@
-document.addEventListener("DOMContentLoaded", () => {
-    // Select all tocaccordion items
-    const tocaccordionItems = document.querySelectorAll(".tocaccordion-item");
+document.addEventListener('DOMContentLoaded', function () {
+    const tocItems = document.querySelectorAll('.toc .tocaccordion-item');
 
-    tocaccordionItems.forEach((item) => {
-        const title = item.querySelector(".tocaccordion-title");
-        const body = item.querySelector(".tocaccordion-body");
-        const icon = item.querySelector(".tocaccordion-icon");
+    tocItems.forEach(function (item, idx) {
+        const title = item.querySelector('.tocaccordion-title');
+        const body = item.querySelector('.tocaccordion-body');
+        const icon = item.querySelector('.tocaccordion-icon');
 
-        // Ensure all tocaccordions start closed
-        body.style.maxHeight = "0";
-        icon.textContent = "+";
+        if (!title || !body) return;
 
-        // Add click event listener
-        title.addEventListener("click", () => {
-            const isOpen = title.classList.contains("active");
+        // Give the body a stable id for aria-controls
+        const bodyId = body.id || `ttm-toc-body-${idx + 1}`;
+        body.id = bodyId;
+        title.setAttribute('aria-controls', bodyId);
+        title.setAttribute('aria-expanded', 'false');
+        icon.textContent = '+';
+        body.style.maxHeight = '0';
 
-            // Close all other tocaccordion items (optional: for exclusive behavior)
-            tocaccordionItems.forEach((otherItem) => {
-                const otherTitle = otherItem.querySelector(".tocaccordion-title");
-                const otherBody = otherItem.querySelector(".tocaccordion-body");
-                const otherIcon = otherItem.querySelector(".tocaccordion-icon");
+        const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-                if (otherTitle !== title) {
-                    otherBody.style.maxHeight = "0";
-                    otherTitle.classList.remove("active");
-                    otherIcon.textContent = "+";
+        const updateOpenHeight = function () {
+            if (title.classList.contains('active')) {
+                if (prefersReduced) {
+                    body.style.maxHeight = 'none';
+                } else {
+                    body.style.maxHeight = body.scrollHeight + 'px';
+                }
+            }
+        };
+
+        title.addEventListener('click', function () {
+            const isOpen = title.classList.contains('active');
+
+            // Close other items for exclusive behavior
+            tocItems.forEach(function (other) {
+                const otherTitle = other.querySelector('.tocaccordion-title');
+                const otherBody = other.querySelector('.tocaccordion-body');
+                const otherIcon = other.querySelector('.tocaccordion-icon');
+                if (otherTitle && otherBody && otherTitle !== title) {
+                    otherBody.style.maxHeight = '0';
+                    otherTitle.classList.remove('active');
+                    otherTitle.setAttribute('aria-expanded', 'false');
+                    if (otherIcon) otherIcon.textContent = '+';
                 }
             });
 
-            // Toggle the clicked tocaccordion item
             if (isOpen) {
-                body.style.maxHeight = "0"; // Collapse
-                title.classList.remove("active");
-                icon.textContent = "+";
+                body.style.maxHeight = '0';
+                title.classList.remove('active');
+                title.setAttribute('aria-expanded', 'false');
+                icon.textContent = '+';
             } else {
-                body.style.maxHeight = `${body.scrollHeight}px`; // Expand
-                title.classList.add("active");
-                icon.textContent = "-";
+                title.classList.add('active');
+                title.setAttribute('aria-expanded', 'true');
+                icon.textContent = '-';
+                if (prefersReduced) {
+                    body.style.maxHeight = 'none';
+                } else {
+                    body.style.maxHeight = body.scrollHeight + 'px';
+                }
             }
+
+            // After transition, remove max-height if reduced-motion is disabled (allow natural height changes)
+            if (!prefersReduced) {
+                setTimeout(function () {
+                    if (title.classList.contains('active')) {
+                        body.style.maxHeight = body.scrollHeight + 'px';
+                    }
+                }, 350);
+            }
+        });
+
+        // Recalculate heights on resize (debounced)
+        let resizeTimer = null;
+        window.addEventListener('resize', function () {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(updateOpenHeight, 150);
         });
     });
 });

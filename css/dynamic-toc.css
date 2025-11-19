@@ -59,6 +59,26 @@
     transition-duration: .3s;
 }
 
+@media (prefers-reduced-motion: reduce) {
+    .toc .tocaccordion-body {
+        transition: none;
+    }
+}
+
+.toc .tocaccordion-title:focus-visible {
+    outline: 3px solid #2b8af6;
+    outline-offset: 2px;
+}
+
+.toc .tocaccordion-body ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.toc .tocaccordion-body.open {
+    max-height: none;
+}
+
 .toc .tocaccordion-body ul {
     list-style-type: none;
     padding: 0;

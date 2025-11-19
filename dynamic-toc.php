@@ -1,69 +1,149 @@
 <?php
 /** 
  * Plugin Name: Dynamic Table of Contents Generator
- * Version: 1.0.2
+ * Version: 1.1
  * Description: Automatically generates a dynamic table of contents for posts and pages based on headings.
 */
 
 declare( strict_types=1 );
 namespace TTM\Dynamic_TOC;
 
-add_action( 'the_content', function( $content ) {
-    if( ! get_field( 'enable_dynamic_toc' ) ) {
+// Exit if accessed directly
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
+/**
+ * Load textdomain for translations
+ */
+add_action( 'plugins_loaded', function() {
+    load_plugin_textdomain( 'dynamic-toc', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+} );
+
+/**
+ * Register front-end assets so they can be enqueued only when needed
+ */
+add_action( 'wp_enqueue_scripts', function() {
+    wp_register_script( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'js/dynamic-toc.js', array(), '1.1', true );
+    wp_register_style( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'css/dynamic-toc.css', array(), '1.1' );
+} );
+
+add_filter( 'the_content', __NAMESPACE__ . '\\ttm_dynamic_toc_the_content' );
+
+/**
+ * Main content filter wrapper. Checks context and ACF field safely, then generates TOC when appropriate.
+ */
+function ttm_dynamic_toc_the_content( $content ) {
+    // Only run on front-end singular pages in the main query
+    if ( is_admin() || ! is_singular() ) {
         return $content;
-    };
-    return automatic_toc( $content );
-});
+    }
 
-function automatic_toc( string $content ): string {
+    global $post;
 
-    // Identify <h2> tags inside divs with class "custom_block" (handles multiple classes)
-    $exclude_pattern = '/<div[^>]*\bclass\b[^>]*=\s*"[^"]*\bcustom_block\b[^"]*"[^>]*>(.*?)<\/div>/is';
-    preg_match_all($exclude_pattern, $content, $excluded_blocks);
-    $excluded_h2s = [];
+    // Safe ACF check (ACF may not be active)
+    $enabled = false;
+    if ( function_exists( 'get_field' ) ) {
+        $field = get_field( 'enable_dynamic_toc' );
+        $enabled = is_array( $field ) ? in_array( 'enable_dynamic_toc', $field, true ) : (bool) $field;
+    }
 
-    foreach ($excluded_blocks[1] as $block_content) {
-        preg_match_all('/<h2([^>]*)>(.*?)<\/h2>/i', $block_content, $h2_matches, PREG_SET_ORDER);
-        foreach ($h2_matches as $h2) {
-            $excluded_h2s[] = $h2[0];
+    // Allow programmatic overrides
+    $enabled = apply_filters( 'ttm_dynamic_toc_enabled', $enabled, isset( $post->ID ) ? $post->ID : 0 );
+    if ( ! $enabled ) {
+        return $content;
+    }
+
+    return automatic_toc( $content, isset( $post->ID ) ? (int) $post->ID : 0 );
+}
+
+function automatic_toc( string $content, int $post_id = 0 ): string {
+    // Build TOC using DOMDocument to be more reliable than regex
+    $toc_list = array();
+
+    // Suppress libxml warnings for malformed HTML fragments
+    $internal_errors = libxml_use_internal_errors( true );
+
+    $doc = new \DOMDocument();
+    // Wrap content in a container so we can extract modified inner HTML later
+    $wrapped = '<div class="ttm-toc-wrapper">' . $content . '</div>';
+    $doc->loadHTML( mb_convert_encoding( $wrapped, 'HTML-ENTITIES', 'UTF-8' ) );
+    $xpath = new \DOMXPath( $doc );
+
+    // Identify all <div> elements that include the class "custom_block" and mark descendant H2s to ignore
+    $ignore_map = array();
+    $divs = $xpath->query( '//div[contains(concat(" ", normalize-space(@class), " "), " custom_block ")]' );
+    foreach ( $divs as $div ) {
+        $h2s_in_div = $div->getElementsByTagName( 'h2' );
+        foreach ( $h2s_in_div as $h2 ) {
+            $ignore_map[spl_object_hash( $h2 )] = true;
         }
     }
 
-    // Pattern to match <h2> tags
-    $pattern = '/<h2([^>]*)>(.*?)<\/h2>/i'; // Match <h2> tags and capture attributes and content inside
-
-    // Process <h2> tags to add unique IDs and populate TOC list
-    $content = preg_replace_callback($pattern, function ($matches) use (&$toc_list, $excluded_h2s) {
-        if (in_array($matches[0], $excluded_h2s)) {
-            // Skip modifying this <h2>
-            return $matches[0];
+    // Gather all H2 elements
+    $h2s = $doc->getElementsByTagName( 'h2' );
+    $used_slugs = array();
+    foreach ( $h2s as $h2 ) {
+        // Skip any H2s inside ignored containers
+        if ( isset( $ignore_map[spl_object_hash( $h2 )] ) ) {
+            continue;
         }
 
-        $attributes = $matches[1];
-        $heading_html = $matches[2]; // Retain the full inner HTML
+        $heading_text = trim( $h2->textContent );
+        if ( $heading_text === '' ) {
+            continue;
+        }
 
-        // Remove any existing ID from the <h2> tag
-        $attributes = preg_replace('/\s*id\s*=\s*"[^"]*"/i', '', $attributes); // Remove all ID attributes, even if spaced or formatted differently
+        // Use existing ID if present; otherwise generate a safe WP slug and ensure uniqueness
+        if ( $h2->hasAttribute( 'id' ) ) {
+            $slug = $h2->getAttribute( 'id' );
+        } else {
+            $slug = \sanitize_title( wp_strip_all_tags( $heading_text ) );
+            $original = $slug;
+            $i = 2;
+            while ( in_array( $slug, $used_slugs, true ) ) {
+                $slug = $original . '-' . $i;
+                $i++;
+            }
+            $h2->setAttribute( 'id', $slug );
+        }
 
-        // Generate a slug from the heading text (strip HTML tags before processing for the slug)
-        $heading_text = strip_tags($heading_html); // Extract text without HTML
-        $slug = strtolower($heading_text); // Convert to lowercase
-        $slug = preg_replace('/[^a-z0-9\s]+/', '', $slug); // Remove non-alphanumeric characters except spaces
-        $slug = preg_replace('/\s+/', '-', $slug); // Replace spaces with dashes
-        $slug = trim($slug, '-'); // Trim leading/trailing dashes
+        $used_slugs[] = $slug;
+        $toc_list[] = array( 'slug' => $slug, 'text' => $heading_text );
+    }
 
-        // Add the slug to the TOC list
-        $toc_list[] = [
-            'slug' => $slug,
-            'text' => $heading_text
-        ];
+    // Restore libxml state
+    libxml_clear_errors();
+    libxml_use_internal_errors( $internal_errors );
 
-        // Return the modified <h2> with the new ID, preserving the nested elements
-        return '<h2 id="' . esc_attr($slug) . '" ' . trim($attributes) . '>' . $heading_html . '</h2>';
-    }, $content);
+    // Nothing to do if no headings found
+    if ( empty( $toc_list ) ) {
+        return $content;
+    }
 
-    // Return the modified content
-    return toc( $toc_list ) . $content;
+    // Enqueue assets only when we will output the TOC
+    if ( ! is_admin() ) {
+        wp_enqueue_script( 'ttm-dynamic-toc' );
+        wp_enqueue_style( 'ttm-dynamic-toc' );
+    }
+
+    // Extract the modified inner HTML of our wrapper container
+    $wrapper = $doc->getElementsByTagName( 'div' )->item( 0 );
+    $new_content = '';
+    if ( $wrapper ) {
+        foreach ( $wrapper->childNodes as $child ) {
+            $new_content .= $doc->saveHTML( $child );
+        }
+    } else {
+        // Fallback
+        $new_content = $content;
+    }
+
+    // Build TOC HTML and allow developers to filter it
+    $toc_html = toc( $toc_list );
+    $toc_html = apply_filters( 'ttm_dynamic_toc_html', $toc_html, $toc_list, $post_id );
+
+    return $toc_html . $new_content;
 }
 
 function toc( array $toc_list ) : string {
@@ -149,10 +229,4 @@ add_action( 'acf/include_fields', function() {
         'description' => '',
         'show_in_rest' => 0,
     ) );
-} );
-
-
-add_action( 'wp_enqueue_scripts', function() {
-    wp_enqueue_script( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'js/dynamic-toc.js', array(), '1.0.2', true );
-    wp_enqueue_style( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'css/dynamic-toc.css', array(), '1.0.2' );
 } );
