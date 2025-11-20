@@ -11,7 +11,7 @@
  * Plugin Name:       Dynamic Table of Contents Generator
  * Plugin URI:        https://github.com/NathanDozen3/dynamic-toc/
  * Description:       Automatically generates a dynamic table of contents for posts and pages based on headings.
- * Version:           1.4.0
+ * Version:           1.5.0
  * Requires at least: 5.2
  * Requires PHP:      8.1
  * Author:            Nathan Johnson
@@ -53,6 +53,67 @@ add_action(
 );
 
 /**
+ * Get the list of post types that support the TOC meta box.
+ *
+ * @since 1.5
+ * @return string[] Array of post type slugs.
+ */
+function ttm_get_meta_post_types(): array {
+	/**
+	 * Filter the list of post types which should display the Dynamic TOC meta box.
+	 *
+	 * Allows themes and plugins to add support for additional post types.
+	 *
+	 * @since 1.1
+	 *
+	 * @param string[] $post_types Array of post type slugs. Default: array( 'post', 'page' ).
+	 * @return string[]
+	 */
+	$post_types = apply_filters( 'ttm_dynamic_toc_meta_post_types', array( 'post', 'page' ) );
+	return (array) $post_types;
+}
+
+/**
+ * Get the post meta key used for per-post TOC enable flag.
+ *
+ * @since 1.5
+ * @return string Meta key name.
+ */
+function ttm_get_dynamic_toc_meta_key(): string {
+	/**
+	 * Filter the post meta key used to determine whether the TOC is enabled per-post.
+	 *
+	 * Allows changing the meta key name that the plugin looks up on the post.
+	 *
+	 * @since 1.1
+	 *
+	 * @param string $meta_key Meta key to check for per-post TOC enable. Default 'ttm_dynamic_toc_enabled'.
+	 * @param int    $post_id Post ID.
+	 * @return string
+	 */
+	$post_id = get_the_ID();
+	$meta_key = apply_filters( 'ttm_dynamic_toc_meta_key', 'ttm_dynamic_toc_enabled', $post_id );
+
+	if ( $post_id ) {
+
+		/**
+		 * Filters the post meta key used to determine whether the TOC is enabled for a specific post.
+		 *
+		 * This is a dynamic hook, the actual hook name includes the post ID. Example:
+		 * `ttm_dynamic_toc_meta_key_123` for post ID 123.
+		 *
+		 * @since 1.5
+		 *
+		 * @param string $meta_key Meta key to check for per-post TOC enable. Default: 'ttm_dynamic_toc_enabled'.
+		 * @param int    $post_id  Post ID.
+		 * @return string Filtered meta key to use for this post.
+		 */
+		$meta_key = apply_filters( "ttm_dynamic_toc_meta_key_$post_id", $meta_key, $post_id );
+	}
+	return $meta_key;
+}
+
+/**
  * Register plugin assets (scripts & styles).
  *
  * Registers the script and style handles so they may be enqueued when a TOC is rendered.
@@ -86,17 +147,7 @@ function ttm_dynamic_toc_the_content( string $content ): string {
 
 	// Per-page meta takes precedence. If post meta is explicitly set (0/1), use it.
 	// Fallback to global option and then filter.
-	/**
-	 * Filter the post meta key used to determine whether the TOC is enabled per-post.
-	 *
-	 * Allows changing the meta key name that the plugin looks up on the post.
-	 *
-	 * @since 1.1
-	 *
-	 * @param string $meta_key Meta key to check for per-post TOC enable. Default 'ttm_dynamic_toc_enabled'.
-	 * @return string
-	 */
-	$meta_key = apply_filters( 'ttm_dynamic_toc_meta_key', 'ttm_dynamic_toc_enabled' );
+	$meta_key = ttm_get_dynamic_toc_meta_key();
 	$meta_val = get_post_meta( isset( $post->ID ) ? (int) $post->ID : 0, $meta_key, true );
 
 	if ( '' !== $meta_val && null !== $meta_val ) {
@@ -340,17 +391,8 @@ function automatic_toc( string $content, int $post_id = 0 ): string {
  * @return void
  */
 function ttm_dynamic_toc_add_meta_box(): void {
-	/**
-	 * Filter the list of post types which should display the Dynamic TOC meta box.
-	 *
-	 * Allows themes and plugins to add support for additional post types.
-	 *
-	 * @since 1.1
-	 *
-	 * @param string[] $post_types Array of post type slugs. Default: array( 'post', 'page' ).
-	 * @return string[]
-	 */
-	$post_types = apply_filters( 'ttm_dynamic_toc_meta_post_types', array( 'post', 'page' ) );
+
+	$post_types = ttm_get_meta_post_types();
 	foreach ( (array) $post_types as $pt ) {
 		add_meta_box(
 			'ttm_dynamic_toc_meta',
@@ -365,6 +407,40 @@ function ttm_dynamic_toc_add_meta_box(): void {
 add_action( 'add_meta_boxes', __NAMESPACE__ . '\\ttm_dynamic_toc_add_meta_box' );
 
 /**
+ * Register post meta for the per-page TOC flag so it is available via REST/Gutenberg.
+ *
+ * Uses the same meta key filtered by `ttm_dynamic_toc_meta_key` and allows themes
+ * and plugins to show the flag in the REST API and block editor.
+ *
+ * @since 1.4.0
+ * @return void
+ */
+function ttm_dynamic_toc_register_post_meta(): void {
+	$meta_key = ttm_get_dynamic_toc_meta_key();
+	$post_types = ttm_get_meta_post_types();
+
+	// Register the post meta per post type to ensure compatibility with
+	// environments where passing an array to `register_post_meta` may cause
+	// unexpected runtime behavior. Iterate explicitly to avoid type issues.
+	$meta_args = array(
+		'type'              => 'boolean',
+		'single'            => true,
+		'show_in_rest'      => true,
+		'sanitize_callback' => function ( $value ) {
+			return (bool) $value;
+		},
+		'auth_callback'     => function () {
+			return current_user_can( 'edit_posts' );
+		},
+	);
+
+	foreach ( (array) $post_types as $pt ) {
+		register_post_meta( $pt, $meta_key, $meta_args );
+	}
+}
+add_action( 'init', __NAMESPACE__ . '\\ttm_dynamic_toc_register_post_meta' );
+
+/**
  * Meta box display callback.
  *
  * @since 1.1
@@ -372,26 +448,17 @@ add_action( 'add_meta_boxes', __NAMESPACE__ . '\\ttm_dynamic_toc_add_meta_box' )
  * @return void Outputs the meta box HTML.
  */
 function ttm_dynamic_toc_meta_box_callback( WP_Post $post ): void {
-	/**
-	 * Filter the post meta key used to store the per-page TOC enabled state.
-	 *
-	 * Mirrors the same filter used when reading the meta in the content filter
-	 * so custom meta keys remain consistent.
-	 *
-	 * @since 1.1
-	 *
-	 * @param string $meta_key Meta key to use. Default: 'ttm_dynamic_toc_enabled'.
-	 * @return string
-	 */
-	$meta_key = apply_filters( 'ttm_dynamic_toc_meta_key', 'ttm_dynamic_toc_enabled' );
+	$meta_key = ttm_get_dynamic_toc_meta_key();
 	$value = get_post_meta( $post->ID, $meta_key, true );
 	wp_nonce_field( 'ttm_dynamic_toc_meta_box', 'ttm_dynamic_toc_meta_box_nonce' );
 	?>
 	<p>
 		<label for="ttm_dynamic_toc_enabled">
 			<input type="checkbox" name="ttm_dynamic_toc_enabled" id="ttm_dynamic_toc_enabled" value="1" <?php checked( $value, '1' ); ?> />
-			<?php esc_html_e( 'Enable Dynamic Table of Contents for this page', 'dynamic-toc' ); ?>
+			<?php esc_html_e( 'Show Table of Contents on this page', 'dynamic-toc' ); ?>
 		</label>
+		<br />
+		<span class="description"><?php esc_html_e( 'When checked, a collapsible Table of Contents will appear at the top of this page.', 'dynamic-toc' ); ?></span>
 	</p>
 	<?php
 }
@@ -423,17 +490,7 @@ function ttm_dynamic_toc_save_meta( int $post_id ): void {
 		return;
 	}
 
-	/**
-	 * Filter the post meta key used to store the per-page TOC enabled state when saving.
-	 *
-	 * This ensures the save handler writes to the same meta key that is read elsewhere.
-	 *
-	 * @since 1.1
-	 *
-	 * @param string $meta_key Meta key to use. Default: 'ttm_dynamic_toc_enabled'.
-	 * @return string
-	 */
-	$meta_key = apply_filters( 'ttm_dynamic_toc_meta_key', 'ttm_dynamic_toc_enabled' );
+	$meta_key = ttm_get_dynamic_toc_meta_key();
 	$value = isset( $_POST['ttm_dynamic_toc_enabled'] ) ? '1' : '0';
 	update_post_meta( $post_id, $meta_key, $value );
 
@@ -442,6 +499,42 @@ function ttm_dynamic_toc_save_meta( int $post_id ): void {
 	delete_transient( $cache_key );
 }
 add_action( 'save_post', __NAMESPACE__ . '\\ttm_dynamic_toc_save_meta' );
+
+/**
+ * Shortcode handler to render the TOC in-place.
+ *
+ * Usage: [dynamic_toc]
+ *
+ * @since 1.4.0
+ * @param array $atts Shortcode attributes (reserved for future use).
+ * @return string HTML markup for the TOC.
+ */
+function ttm_dynamic_toc_shortcode( $atts = array() ) {
+	global $post;
+
+	if ( empty( $post ) ) {
+		return '';
+	}
+
+	// Respect the same per-post/meta & filters used by the content filter.
+	$meta_key = ttm_get_dynamic_toc_meta_key();
+	$meta_val = get_post_meta( $post->ID, $meta_key, true );
+	if ( '' !== $meta_val && null !== $meta_val ) {
+		$enabled = (bool) $meta_val;
+	} else {
+		$enabled = (bool) get_option( 'ttm_dynamic_toc_enabled', false );
+	}
+
+	$enabled = apply_filters( 'ttm_dynamic_toc_enabled', $enabled, $post->ID );
+
+	if ( ! $enabled ) {
+		return '';
+	}
+
+	$content = get_post_field( 'post_content', $post->ID );
+	return automatic_toc( $content, (int) $post->ID );
+}
+add_shortcode( 'dynamic_toc', __NAMESPACE__ . '\ttm_dynamic_toc_shortcode' );
 
 /**
  * Render the TOC markup from a list of items.

@@ -3,7 +3,7 @@
 A small, accessible WordPress plugin that automatically generates a table of contents (TOC) for posts and pages based on heading tags. It builds a nested, semantic TOC, provides a collapsible panel with ARIA attributes, and supports per-page enable/disable and server-side caching.
 
 - Plugin slug: `dynamic-toc`
-- Version: 1.4.0
+- Version: 1.5.0
 - Requires: WordPress 5.2+
 - Requires PHP: 8.1+
 - License: GPL-2.0-or-later
@@ -66,6 +66,17 @@ add_filter( 'ttm_dynamic_toc_heading_levels', function() {
 add_filter( 'ttm_dynamic_toc_meta_key', function( $key ) {
     return 'my_custom_toc_flag';
 } );
+```
+
+- `ttm_dynamic_toc_meta_key_{post_id}` (string $meta_key, int $post_id)
+  - Dynamic filter that allows overriding the meta key used on a per-post basis. Replace `{post_id}` with the numeric post ID. This hook is fired only when a valid post ID is available and allows themes/plugins to change which meta key the plugin reads for that specific post.
+
+```php
+// For post ID 123, change the meta key used by the plugin.
+add_filter( 'ttm_dynamic_toc_meta_key_123', function( $meta_key, $post_id ) {
+    // You can ignore $meta_key and return a custom key for this post.
+    return 'my_custom_toc_flag_for_post_123';
+}, 10, 2 );
 ```
 
 - `ttm_dynamic_toc_cache_ttl` (int $seconds)
