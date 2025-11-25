@@ -3,7 +3,7 @@
 A small, accessible WordPress plugin that automatically generates a table of contents (TOC) for posts and pages based on heading tags. It builds a nested, semantic TOC, provides a collapsible panel with ARIA attributes, and supports per-page enable/disable and server-side caching.
 
 - Plugin slug: `dynamic-toc`
-- Version: 1.5.0
+- Version: 1.6.0
 - Requires: WordPress 5.2+
 - Requires PHP: 8.1+
 - License: GPL-2.0-or-later
@@ -16,6 +16,8 @@ A small, accessible WordPress plugin that automatically generates a table of con
 - Produces accessible markup (button with `aria-expanded`/`aria-controls`, `role="region"`, etc.).
 - Collapsible panel toggle (progressive enhancement with JS).
 - Per-page enable/disable meta box in the editor.
+- Gutenberg block for easy insertion in the block editor.
+- Shortcode support for manual TOC placement.
 - Server-side per-post transient caching to avoid repeated work.
 - Filters to adjust behavior and markup for advanced integrations.
 
@@ -27,9 +29,20 @@ A small, accessible WordPress plugin that automatically generates a table of con
 
 ## Quick Usage
 
+### Automatic Injection
 - The TOC will be inserted into the post content automatically when enabled.
+- Enable per-post via the _Show Table of Contents on this page_ meta box on the post/page edit screen.
 - The plugin detects headings and builds a nested ordered list reflecting the document structure.
 - Assets (JS/CSS) are enqueued only when a TOC will be output.
+
+### Gutenberg Block
+- Use the **Dynamic Table of Contents** block in the block editor to insert a TOC.
+- Search for "toc" or "table of contents" in the block inserter.
+- The block displays a preview in the editor and renders the [dynamic_toc] shortcode on the frontend.
+
+### Shortcode
+- Manually insert `[dynamic_toc]` in post content or text widgets to place the TOC inline.
+- The shortcode respects the same per-page enable/disable settings as the automatic filter.
 
 ## Filters & Hooks
 

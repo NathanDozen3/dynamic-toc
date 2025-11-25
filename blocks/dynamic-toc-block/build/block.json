@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "ttm/dynamic-toc",
+  "title": "Dynamic Table of Contents",
+  "category": "widgets",
+  "description": "Insert a collapsible, hierarchical table of contents based on the headings in your post.",
+  "keywords": [
+    "toc",
+    "table of contents",
+    "navigation"
+  ],
+  "icon": "list-view",
+  "supports": {
+    "html": false,
+    "align": [
+      "wide",
+      "full"
+    ]
+  },
+  "attributes": {},
+  "example": {
+    "attributes": {}
+  },
+  "editorScript": "ttm-dynamic-toc-block-editor",
+  "style": "ttm-dynamic-toc"
+}

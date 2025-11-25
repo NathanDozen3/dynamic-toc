@@ -11,7 +11,7 @@
  * Plugin Name:       Dynamic Table of Contents Generator
  * Plugin URI:        https://github.com/NathanDozen3/dynamic-toc/
  * Description:       Automatically generates a dynamic table of contents for posts and pages based on headings.
- * Version:           1.5.0
+ * Version:           1.6.0
  * Requires at least: 5.2
  * Requires PHP:      8.1
  * Author:            Nathan Johnson
@@ -126,6 +126,39 @@ function ttm_dynamic_toc_register_assets(): void {
 	wp_register_style( 'ttm-dynamic-toc', plugin_dir_url( __FILE__ ) . 'css/dynamic-toc.css', array(), TTM_DYNAMIC_TOC_VERSION );
 }
 add_action( 'wp_enqueue_scripts', __NAMESPACE__ . '\\ttm_dynamic_toc_register_assets' );
+
+/**
+ * Register the Gutenberg block for inserting the Dynamic TOC.
+ *
+ * Registers the dynamic TOC block using the block.json metadata file, allowing
+ * editors to insert a [dynamic_toc] shortcode via the block editor UI.
+ *
+ * @since 1.5.0
+ * @return void
+ */
+function ttm_dynamic_toc_register_block(): void {
+	// Ensure block.json exists before attempting to register.
+	$block_json_file = plugin_dir_path( __FILE__ ) . 'blocks/dynamic-toc-block/block.json';
+	if ( ! file_exists( $block_json_file ) ) {
+		return;
+	}
+
+	// Register the block via block.json metadata.
+	register_block_type( $block_json_file );
+
+	// Enqueue the compiled editor script from the block's build/ directory.
+	$build_file = plugin_dir_path( __FILE__ ) . 'blocks/dynamic-toc-block/build/index.js';
+	if ( file_exists( $build_file ) ) {
+		wp_enqueue_script(
+			'ttm-dynamic-toc-block-editor',
+			plugin_dir_url( __FILE__ ) . 'blocks/dynamic-toc-block/build/index.js',
+			array( 'wp-blocks', 'wp-block-editor', 'wp-i18n' ),
+			filemtime( $build_file ),
+			true
+		);
+	}
+}
+add_action( 'init', __NAMESPACE__ . '\\ttm_dynamic_toc_register_block' );
 
 /**
  * Filter the post content and inject the dynamic TOC when enabled.
@@ -505,6 +538,10 @@ add_action( 'save_post', __NAMESPACE__ . '\\ttm_dynamic_toc_save_meta' );
  *
  * Usage: [dynamic_toc]
  *
+ * When used as a shortcode, bypasses the per-post enable check since the user
+ * has explicitly inserted the block/shortcode. The filter ttm_dynamic_toc_enabled
+ * can still be used to prevent rendering if needed.
+ *
  * @since 1.4.0
  * @param array $atts Shortcode attributes (reserved for future use).
  * @return string HTML markup for the TOC.
@@ -516,16 +553,10 @@ function ttm_dynamic_toc_shortcode( $atts = array() ) {
 		return '';
 	}
 
-	// Respect the same per-post/meta & filters used by the content filter.
-	$meta_key = ttm_get_dynamic_toc_meta_key();
-	$meta_val = get_post_meta( $post->ID, $meta_key, true );
-	if ( '' !== $meta_val && null !== $meta_val ) {
-		$enabled = (bool) $meta_val;
-	} else {
-		$enabled = (bool) get_option( 'ttm_dynamic_toc_enabled', false );
-	}
-
-	$enabled = apply_filters( 'ttm_dynamic_toc_enabled', $enabled, $post->ID );
+	// When called via shortcode, the user explicitly wants the TOC,
+	// so we skip the per-post meta/option check and go straight to rendering.
+	// However, we still respect the global filter for override purposes.
+	$enabled = apply_filters( 'ttm_dynamic_toc_enabled', true, $post->ID );
 
 	if ( ! $enabled ) {
 		return '';
