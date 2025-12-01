@@ -3,7 +3,7 @@
 A small, accessible WordPress plugin that automatically generates a table of contents (TOC) for posts and pages based on heading tags. It builds a nested, semantic TOC, provides a collapsible panel with ARIA attributes, and supports per-page enable/disable and server-side caching.
 
 - Plugin slug: `dynamic-toc`
-- Version: 1.6.0
+- Version: 1.6.1
 - Requires: WordPress 5.2+
 - Requires PHP: 8.1+
 - License: GPL-2.0-or-later

@@ -1,6 +1,6 @@
 {
 	"name": "dynamic-toc",
-	"version": "1.6.0",
+	"version": "1.6.1",
 	"description": "Dynamic Table of Contents Generator",
 	"scripts": {
 		"build": "wp-scripts build --webpack-src-dir=blocks/dynamic-toc-block --output-path=blocks/dynamic-toc-block/build",
